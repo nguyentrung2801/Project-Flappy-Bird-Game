@@ -1,123 +1,135 @@
 # Flappy Bird – STM32 Nucleo-F401RE
 
-Đây là game Flappy Bird viết bằng C cho board STM32 Nucleo-F401RE, dùng
-thư viện SPL/CMSIS và Ucglib để điều khiển phần cứng và vẽ lên LCD.
-Trong cấu hình hiện tại, SDK dùng màn hình ST7735 128×128. Màn hình được
-xoay 180° và phần chơi chiếm một vùng 128×80 pixel.
+A Flappy Bird game written in C for the STM32 Nucleo-F401RE board, using
+SPL/CMSIS and Ucglib to control the hardware and draw on the LCD.
+The current SDK configuration uses a 128×128 ST7735 display, rotated
+180°, with a 128×80 pixel play area.
 
-## Điều khiển
+## Controls
 
-- **SW1 (PB5):** đưa con trỏ về dòng LEVEL trong menu.
-- **SW5 (PB4):** đưa con trỏ xuống dòng START.
-- **SW3 (PA4):** nhấn ở dòng LEVEL để đổi độ khó, nhấn ở dòng START để chơi.
-  Khi đang chơi, mỗi lần nhấn là một lần chim vỗ cánh.
-- Giữ SW3 sẽ không làm chim vỗ cánh liên tục. Sau khi nhấn START, bạn cần
-  nhả nút rồi nhấn lại để điều khiển chim.
-- Khi thua, game dừng lại, buzzer tắt và màn hình hiện điểm vừa đạt được.
-  LED ở chân PA11 nháy 5 lần trong khoảng 1,2 giây, sau đó game trở về menu.
+- **SW1 (PB5):** move the menu cursor to LEVEL.
+- **SW5 (PB4):** move the cursor to START.
+- **SW3 (PA4):** press on LEVEL to change the difficulty, or on START to
+  begin playing. During a game, each press makes the bird flap once.
+- Holding SW3 does not make the bird flap repeatedly. After pressing START,
+  release the button before pressing it again to flap.
+- When you lose, the game stops, the buzzer turns off, and your score appears
+  on screen. The LED on PA11 blinks five times over about 1.2 seconds,
+  then the game returns to the menu.
 
-Buzzer nối với PC9. Code hiện chỉ bật/tắt chân GPIO nên dùng được với module
-buzzer có sẵn bộ dao động. Nếu bạn dùng buzzer thụ động thì cần thêm phần
-phát PWM để tạo âm thanh.
+The buzzer is connected to PC9. The code simply switches the GPIO pin on
+and off, so it works with a buzzer module that has a built-in oscillator.
+If you use a passive buzzer, you will need to add PWM output to produce sound.
 
-## Phân chia source
+## Source Layout
 
-File header nằm trong `Inc/`, còn phần cài đặt nằm trong `Src/`. Hai thư mục
-được chia giống nhau để dễ tìm: chẳng hạn, `Inc/game/bird.h` đi cùng với
-`Src/game/bird.c`.
+Header files are in `Inc/`, and their implementations are in `Src/`.
+Both folders follow the same layout to make files easy to find. For example,
+`Inc/game/bird.h` goes with `Src/game/bird.c`.
 
-| Module | Dùng để làm gì? |
+| Module | What it does |
 |---|---|
-| app | Chuyển giữa menu, đang chơi và game over; xử lý thao tác nút và hiệu ứng |
-| game/config.h, level_config.c | Đặt kích thước vùng chơi, chim, ống và thông số của từng level |
-| game/bird | Tính vị trí, vận tốc của chim và xử lý vỗ cánh |
-| game/pipe | Tạo ống mới và cho ống di chuyển |
-| game/collision | Kiểm tra chim có chạm ống, trần hoặc sàn không |
-| game/game | Ghép các bước cập nhật game, cộng điểm và xác định lúc thua |
-| gfx/render | Vẽ chim, ống và khung; khi ống di chuyển chỉ vẽ lại những dải thay đổi |
-| gfx/ui | Vẽ menu và màn hình kết quả |
-| periph/input | Lọc rung nút trong 15 ms và ghi nhận mỗi lần nhấn |
-| periph/buzzer, led | Bật/tắt LED và buzzer; tiếng vỗ cánh kéo dài khoảng 60 ms |
-| drivers/timebase | Lấy thời gian theo mili-giây và gọi bộ lập lịch của SDK |
-| board_config.h | Khai báo chân GPIO và thứ tự màu LCD |
+| app | Switches between the menu, gameplay, and game over; handles button actions and effects |
+| game/config.h, level_config.c | Defines the play area, bird and pipe sizes, and settings for each level |
+| game/bird | Updates the bird's position and velocity, and handles flapping |
+| game/pipe | Creates new pipes and moves them across the screen |
+| game/collision | Checks whether the bird hits a pipe, the ceiling, or the floor |
+| game/game | Runs the game update steps, adds points, and determines when the game is over |
+| gfx/render | Draws the bird, pipes, and border; redraws only the changed strips as pipes move |
+| gfx/ui | Draws the menu and results screen |
+| periph/input | Debounces buttons over 15 ms and records each press |
+| periph/buzzer, led | Controls the LED and buzzer; the flap sound lasts about 60 ms |
+| drivers/timebase | Reads the time in milliseconds and calls the SDK scheduler |
+| board_config.h | Defines GPIO pins and the LCD color order |
 
-Nếu muốn xem game hoạt động thế nào, bạn có thể bắt đầu từ `app.c`, rồi
-đọc tiếp `game/game.c`. Cứ mỗi 20 ms, game cập nhật chim và ống, kiểm tra
-va chạm rồi mới tính điểm. Khi vẽ LCD mất nhiều thời gian, game sẽ chạy bù
-những bước còn thiếu trước khi vẽ khung hình tiếp theo, để chim và ống
-vẫn di chuyển theo cùng một nhịp.
+To see how the game works, start with `app.c`, then read `game/game.c`.
+Every 20 ms, the game updates the bird and pipe, checks for collisions,
+and then updates the score. If drawing to the LCD takes longer, the game
+catches up on the missing update steps before drawing the next frame,
+keeping the bird and pipe on the same timing.
 
-Phần `game/` chỉ xử lý dữ liệu, không gọi trực tiếp STM32 hay Ucglib.
-Việc đọc nút và cập nhật game đều nằm trong vòng lặp chính. Thời gian được
-lấy từ SysTick do `TimerInit()` của SDK khởi tạo, không dùng TIM2.
+The `game/` code only works with game data; it does not call STM32 or
+Ucglib functions directly. Button input and game updates both run in
+the main loop. Timing comes from SysTick, initialized by the SDK's
+`TimerInit()`; TIM2 is not used.
 
-Phần vẽ ống và kiểm tra va chạm dùng chung `PIPE_GAP_HALF`, nên khe nhìn
-thấy trên màn hình cũng là khe chim có thể bay qua. Trong code, hình chữ
-nhật được tính theo khoảng `[x, x + width)`: có tính biên đầu, không tính
-biên cuối. Chim được phép vừa khít biên khe; vượt ra ngoài thì thua.
-Khi cả ống đã đi qua chim, điểm tăng một lần.
+Pipe drawing and collision detection share `PIPE_GAP_HALF`, so the gap
+you see on screen matches the space the bird can fly through. Rectangles
+use the interval `[x, x + width)`: the starting edge is included, and
+the ending edge is excluded. The bird can fit exactly against the gap's
+edge, but moving beyond it ends the game. You earn one point when the
+entire pipe has passed the bird.
 
-## Build bằng PowerShell
+## Building with PowerShell
 
-Bạn cần có SDK `ThuVien_SDK_1.0.3_NUCLEO-F401RE-master` và ARM GCC đi kèm
-STM32CubeIDE. Mở PowerShell tại thư mục chứa `build.ps1`, thay đường dẫn
-compiler bên dưới bằng đường dẫn trên máy bạn rồi chạy:
+You will need the `ThuVien_SDK_1.0.3_NUCLEO-F401RE-master` SDK and the
+ARM GCC toolchain included with STM32CubeIDE. Open PowerShell in the
+folder containing `build.ps1`, replace the compiler path below with
+the one on your machine, and run:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -SdkRoot "C:\ThuVien_SDK_1.0.3_NUCLEO-F401RE-master" -ToolchainBin "DUONG_DAN_ARM_GCC\bin" -Configuration Debug
+powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -SdkRoot "C:\ThuVien_SDK_1.0.3_NUCLEO-F401RE-master" -ToolchainBin "PATH_TO_ARM_GCC\bin" -Configuration Debug
 ```
 
-Muốn build bản tối ưu kích thước, đổi `Debug` thành `Release`. Nếu không muốn
-nhập lại đường dẫn mỗi lần, bạn có thể đặt hai biến môi trường
-`FLAPPY_SDK_ROOT` và `ARM_GCC_BIN`, rồi bỏ các tham số đường dẫn khỏi lệnh.
+Change `Debug` to `Release` for a build optimized for size. To avoid
+typing the paths each time, set the `FLAPPY_SDK_ROOT` and `ARM_GCC_BIN`
+environment variables, then leave the path arguments out of the command.
 
-Build xong, các file ELF, HEX và map sẽ nằm trong `build/Debug` hoặc
-`build/Release`. Script bật `-Wall -Wextra -Werror` cho code ứng dụng, nên
-cần sửa hết cảnh báo ở phần này mới build được. Cảnh báo từ SDK vẫn được
-hiện ra nhưng không bị coi là lỗi.
+After the build, you will find the ELF, HEX, and map files in
+`build/Debug` or `build/Release`. The script enables
+`-Wall -Wextra -Werror` for application code, so any warnings in that
+code must be fixed before the build can succeed. SDK warnings are still
+shown, but they are not treated as errors.
 
 ## STM32CubeIDE
 
-Sau khi import project, vào **Properties → Resource → Linked Resources**
-và kiểm tra liên kết `ThuVien_SDK_1.0.3_NUCLEO-F401RE-master`.
-Project đang trỏ đến `C:/ThuVien_SDK_1.0.3_NUCLEO-F401RE-master`.
-Nếu bạn để SDK ở chỗ khác, sửa lại liên kết này. Cả Debug và Release đều
-đã được cấu hình đường dẫn header và source của SDK giống nhau.
+After importing the project, open **Properties → Resource → Linked Resources**
+and check the `ThuVien_SDK_1.0.3_NUCLEO-F401RE-master` link.
+It currently points to `C:/ThuVien_SDK_1.0.3_NUCLEO-F401RE-master`.
+If your SDK is elsewhere, update this link. Debug and Release are both
+configured to use the same SDK header paths and source entries.
 
-Với lần build đầu sau khi cập nhật source, hãy **Refresh → Project → Clean →
-Build**. Bước này giúp CubeIDE tạo lại makefile theo danh sách file mới,
-thay cho các file cũ như `entities.c`, `levels.c`, `loop.c` và `game/ui.c`.
-Các makefile trong `Debug/` do IDE tự tạo, nên bạn không cần sửa chúng bằng tay.
+For the first build after updating the source, run
+**Refresh → Project → Clean → Build**. This lets CubeIDE regenerate
+the makefiles with the new file list, replacing references to old files
+such as `entities.c`, `levels.c`, `loop.c`, and `game/ui.c`.
+The IDE generates the makefiles in `Debug/`, so there is no need to
+edit them by hand.
 
-## Kiểm thử
+## Testing
 
-Bản source này đã build và link được cả Debug lẫn Release bằng ARM GCC
-13.3.1, có đầy đủ file ELF và HEX. Code ứng dụng không còn cảnh báo với
-`-Wall -Wextra -Werror`; SDK vẫn còn một số cảnh báo về tham số không dùng.
+This source has been compiled and linked in both Debug and Release
+with ARM GCC 13.3.1, producing ELF and HEX files. Application code passes
+`-Wall -Wextra -Werror`; the SDK still reports some unused-parameter warnings.
 
-Phần test C mới được kiểm tra cú pháp, chưa chạy các lệnh `assert` vì máy
-dùng để sửa source chưa có compiler C chạy trên Windows. Firmware cũng
-chưa được nạp thử trên board thật.
+The C tests have only been checked for syntax. Their `assert` checks
+have not been run because the machine used to update the source did
+not have a native Windows C compiler available. The firmware has not
+been flashed or tested on a physical board yet.
 
-File `tests/game_test.c` có các trường hợp kiểm tra cho cả hai level:
-bay sát biên khe, chạm trần/sàn, chiều rộng ống, cộng điểm một lần,
-tạo lại ống, dừng khi thua và bắt đầu ván mới. Để chạy, bạn cần GCC cho
-Windows, chẳng hạn MinGW. Thay đường dẫn bên dưới cho đúng với máy bạn
-(đây là GCC chạy trên máy tính, không phải ARM GCC):
+`tests/game_test.c` covers both levels: gap boundaries, ceiling and floor
+collisions, pipe widths, scoring once per pipe, spawning a new pipe,
+stopping after a collision, and starting a new game. To run it, you need
+GCC for Windows, such as MinGW. Replace the path below with yours
+(this is the compiler for your PC, not ARM GCC):
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\run.ps1 -Compiler "DUONG_DAN_MINGW\gcc.exe"
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\run.ps1 -Compiler "PATH_TO_MINGW\gcc.exe"
 ```
 
-Sau khi nạp firmware lên board, bạn có thể thử lần lượt những thao tác sau:
+After flashing the firmware to your board, try these checks:
 
-1. Bấm SW3 ở menu ngay khi bật nguồn, rồi thử lại sau khi chơi thua. Cả hai
-   lần đều phải nhận nút bình thường.
-2. Giữ SW3 khi chơi: chim chỉ vỗ cánh một lần. Nhả rồi nhấn lại mới vỗ tiếp.
-3. Chơi cả hai level và thử bay sát mép khe. Ống rộng lần lượt 8 và 12 pixel;
-   chim không được thua khi vẫn còn nằm trong khe.
-4. Đi qua một ống rồi kiểm tra điểm cuối ván. Mỗi ống chỉ được cộng một điểm,
-   và ván mới phải bắt đầu từ 0.
-5. Khi thua, kiểm tra buzzer đã tắt, chim đã dừng, LED nháy rồi game về menu.
-6. Quan sát xem chim và ống có di chuyển mượt không. Phần này cần thử trên
-   LCD thật vì tốc độ truyền SPI còn phụ thuộc SDK và phần cứng.
+1. Press SW3 in the menu just after powering on, then try again after losing
+   a game. The button should respond normally in both cases.
+2. Hold SW3 during a game: the bird should flap only once. Release and press
+   it again for another flap.
+3. Play both levels and try flying close to the gap edges. Pipes should be
+   8 and 12 pixels wide respectively, and the bird should not lose while
+   it is still inside the gap.
+4. Pass a pipe and check the score at the end of the game. Each pipe should
+   add only one point, and a new game should start at zero.
+5. When you lose, check that the buzzer turns off and the bird stops.
+   The LED should blink before the game returns to the menu.
+6. Watch whether the bird and pipes move smoothly. This needs to be checked
+   on the actual LCD, since SPI speed depends on the SDK and hardware.
+
